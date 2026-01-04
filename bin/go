@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+case "$1" in
+  do) shift; exec "$GO" tool do "$@" ;;
+  *)  exec "$GO" "$@" ;;
+esac
