@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +19,7 @@ var initCmd = &cobra.Command{
 	Short: "Initialize an app for `go do`",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if _, err := exec.LookPath("direnv"); err != nil {
-			return fmt.Errorf("direnv is not installed")
+			return errors.New("direnv is not installed")
 		}
 
 		if err := updateEnvrc(); err != nil {
@@ -26,7 +27,7 @@ var initCmd = &cobra.Command{
 		}
 
 		if err := os.MkdirAll(".claude", 0755); err != nil {
-			return fmt.Errorf("failed to create .claude directory: %w", err)
+			return errors.WithStack(err)
 		}
 		if err := updateClaudeSettings(); err != nil {
 			return err
@@ -45,7 +46,7 @@ var initCmd = &cobra.Command{
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("failed to run direnv allow: %w", err)
+				return errors.WithStack(err)
 			}
 		}
 
@@ -62,7 +63,7 @@ func updateEnvrc() error {
 		for scanner.Scan() {
 			existing[strings.TrimSpace(scanner.Text())] = true
 		}
-		file.Close()
+		_ = file.Close()
 	}
 
 	var toAdd []string
@@ -78,13 +79,13 @@ func updateEnvrc() error {
 
 	file, err := os.OpenFile(".envrc", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to open .envrc: %w", err)
+		return errors.WithStack(err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	for _, entry := range toAdd {
 		if _, err := file.WriteString(entry + "\n"); err != nil {
-			return fmt.Errorf("failed to write to .envrc: %w", err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -101,7 +102,7 @@ func updateClaudeSettings() error {
 	data, err := os.ReadFile(name)
 	if err == nil {
 		if err := json.Unmarshal(data, &settings); err != nil {
-			return fmt.Errorf("failed to parse %s: %w", name, err)
+			return errors.WithStack(err)
 		}
 	} else {
 		settings = make(map[string]any)
@@ -134,11 +135,11 @@ func updateClaudeSettings() error {
 
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal settings: %w", err)
+		return errors.WithStack(err)
 	}
 
 	if err := os.WriteFile(name, append(out, '\n'), 0644); err != nil {
-		return fmt.Errorf("failed to write %s: %w", name, err)
+		return errors.WithStack(err)
 	}
 
 	fmt.Printf("Updated %s with permission: %s\n", name, perm)
@@ -154,7 +155,7 @@ func updateGitignore() error {
 		for scanner.Scan() {
 			existing[strings.TrimSpace(scanner.Text())] = true
 		}
-		file.Close()
+		_ = file.Close()
 	}
 
 	var toAdd []string
@@ -170,13 +171,13 @@ func updateGitignore() error {
 
 	file, err := os.OpenFile(".gitignore", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to open .gitignore: %w", err)
+		return errors.WithStack(err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	for _, entry := range toAdd {
 		if _, err := file.WriteString(entry + "\n"); err != nil {
-			return fmt.Errorf("failed to write to .gitignore: %w", err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -193,11 +194,11 @@ case "$1" in
 esac
 `
 	if err := os.MkdirAll("bin", 0755); err != nil {
-		return fmt.Errorf("failed to create bin directory: %w", err)
+		return errors.WithStack(err)
 	}
 
 	if err := os.WriteFile("bin/go", []byte(script), 0755); err != nil {
-		return fmt.Errorf("failed to write bin/go: %w", err)
+		return errors.WithStack(err)
 	}
 
 	fmt.Println("Created bin/go")
