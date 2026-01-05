@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +16,7 @@ var updateCmd = &cobra.Command{
 		goCmd.Stdout = os.Stdout
 		goCmd.Stderr = os.Stderr
 		if err := goCmd.Run(); err != nil {
-			return fmt.Errorf("failed to update: %w", err)
+			return errors.WithStack(err)
 		}
 		return nil
 	},
