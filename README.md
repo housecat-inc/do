@@ -23,18 +23,19 @@ go do deploy
 
 ## Adding lint rules
 
-To enforce coding standards, we prefer software tools that tell you exactly what standards are not met and where. The `golangci-lint` tool provide this and can be extended.
+To enforce coding standards, we prefer software tools that tell you exactly what standards are not met and where. The [multichecker package](https://pkg.go.dev/golang.org/x/tools/go/analysis/multichecker) provides a way to build this.
 
 Contrast this approach to documenting standards in README.md / AGENTS.md / CLAUDE.md, which leaves both developers and LLMs room to interpret and forget.
 
 A better agentic approach is to tell Claude to write code:
 
-> Write a lint plugin that enforces "use github.com/pkg/errors everywhere"
+> Write an analysis package that enforces "use github.com/pkg/errors everywhere"
 >
-> ⏺ I'll explore to understand lint plugins, then create one that enforces the use of the errors packages.
-> ⏺ Now I'll create the lint plugin. The analyzer will:
->
-> 1. In any file: flag direct use of err. (should use pkg/errors)
+> ⏺ I'll explore to understand analysis packages, then create one that enforces the use of the errors packages.
+> ⏺ Now I'll create the analyzer that will flag direct use of err
 
+Then `go do lint --list` describes the standards.
 
-## Configuring deploy
+## Configuring deploys
+
+TODO

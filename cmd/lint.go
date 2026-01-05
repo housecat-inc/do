@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 
+	doanalysis "github.com/housecat-inc/do/pkg/analysis"
 	"github.com/housecat-inc/do/pkg/analysis/pkgerrors"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -12,10 +13,24 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+var listAnalyzers bool
+
 var lintCmd = &cobra.Command{
 	Use:   "lint",
 	Short: "Run linters on the project",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		analyzers := []*doanalysis.Analyzer{pkgerrors.Analyzer}
+
+		if listAnalyzers {
+			for _, a := range analyzers {
+				fmt.Printf("%s: %s\n", a.Name, a.Doc)
+				for _, msg := range a.Messages {
+					fmt.Printf("  - %s\n", msg)
+				}
+			}
+			return nil
+		}
+
 		if _, err := exec.LookPath("golangci-lint"); err != nil {
 			return errors.New("golangci-lint is not installed. Install it with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest")
 		}
@@ -35,7 +50,7 @@ var lintCmd = &cobra.Command{
 		}
 
 		// Run custom analyzers
-		if issues := runAnalyzers("./...", pkgerrors.Analyzer); issues > 0 {
+		if issues := runAnalyzers("./...", analyzers); issues > 0 {
 			hasErrors = true
 		}
 
@@ -46,7 +61,7 @@ var lintCmd = &cobra.Command{
 	},
 }
 
-func runAnalyzers(pattern string, analyzers ...*analysis.Analyzer) int {
+func runAnalyzers(pattern string, analyzers []*doanalysis.Analyzer) int {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
 	}
@@ -61,7 +76,7 @@ func runAnalyzers(pattern string, analyzers ...*analysis.Analyzer) int {
 	for _, pkg := range pkgs {
 		for _, a := range analyzers {
 			pass := &analysis.Pass{
-				Analyzer:  a,
+				Analyzer:  a.Analyzer,
 				Fset:      pkg.Fset,
 				Files:     pkg.Syntax,
 				Pkg:       pkg.Types,
@@ -105,5 +120,6 @@ linters:
 }
 
 func init() {
+	lintCmd.Flags().BoolVarP(&listAnalyzers, "list", "l", false, "list custom analyzers and their descriptions")
 	rootCmd.AddCommand(lintCmd)
 }
