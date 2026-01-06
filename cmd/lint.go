@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	doanalysis "github.com/housecat-inc/do/pkg/analysis"
 	"github.com/housecat-inc/do/pkg/analysis/pkgerrors"
@@ -94,7 +95,13 @@ func runAnalyzers(pattern string, analyzers []*doanalysis.Analyzer) int {
 }
 
 func ensureLintConfig() error {
-	const configFile = ".golangci.yml"
+	// Find project root (where go.mod is)
+	root, err := findProjectRoot()
+	if err != nil {
+		return err
+	}
+
+	configFile := filepath.Join(root, ".golangci.yml")
 
 	if _, err := os.Stat(configFile); err == nil {
 		return nil
@@ -117,6 +124,24 @@ linters:
 
 	fmt.Printf("Created %s with default configuration\n", configFile)
 	return nil
+}
+
+func findProjectRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", errors.New("could not find go.mod")
+		}
+		dir = parent
+	}
 }
 
 func init() {

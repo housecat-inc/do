@@ -29,7 +29,11 @@ var devCmd = &cobra.Command{
 			"--build.exclude_dir", "node_modules,bin,vendor,.git,dist,build",
 			"--build.exclude_regex", `\.min\.js$|\.sql\.go$|_templ\.go$|_test\.go$|out\.css$|pkg/db/(db|models|querier)\.go$`,
 			"--build.include_ext", "css,go,html,svelte,templ",
+			"--proxy.enabled", "true",
+			"--proxy.proxy_port", "8080",
+			"--proxy.app_port", "8081",
 		)
+		air.Env = append(os.Environ(), "PORT=8081")
 		air.Stdout = os.Stdout
 		air.Stderr = os.Stderr
 		air.Stdin = os.Stdin
