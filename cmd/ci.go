@@ -109,6 +109,41 @@ jobs:
                 body,
               });
             }
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.CLOUDSDK_CORE_PROJECT != ''
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install ko
+        run: go install github.com/google/ko@latest
+
+      - name: Deploy to production
+        env:
+          CLOUDSDK_CORE_PROJECT: ${{ vars.CLOUDSDK_CORE_PROJECT }}
+          CLOUDSDK_RUN_REGION: ${{ vars.CLOUDSDK_RUN_REGION }}
+          CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+          KO_DOCKER_REPO: gcr.io/${{ vars.CLOUDSDK_CORE_PROJECT }}/${{ vars.CLOUD_RUN_SERVICE }}
+        run: go tool do deploy
 `
 
 var ciCmd = &cobra.Command{
@@ -118,6 +153,7 @@ var ciCmd = &cobra.Command{
 - Runs 'go tool do' on all pushes and PRs
 - Deploys preview environments for PRs (if GCP vars are configured)
 - Comments the preview URL on the PR
+- Deploys to production on merge to main
 
 Required GitHub repository variables for deploy:
   CLOUDSDK_CORE_PROJECT      - GCP project ID

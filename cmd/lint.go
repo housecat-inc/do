@@ -33,7 +33,12 @@ var lintCmd = &cobra.Command{
 		}
 
 		if _, err := exec.LookPath("golangci-lint"); err != nil {
-			return errors.New("golangci-lint is not installed. Install it with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest")
+			install := exec.Command("go", "install", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest")
+			install.Stdout = os.Stdout
+			install.Stderr = os.Stderr
+			if err := install.Run(); err != nil {
+				return errors.WithStack(err)
+			}
 		}
 
 		if err := ensureLintConfig(); err != nil {
