@@ -39,6 +39,66 @@ Contrast this approach to documenting standards in README.md / AGENTS.md / CLAUD
 
 Run `go do dev` to live reload your `cmd/app` program. It should look for `PORT` env var and use that if set, but default to port `8080` for deploy via Cloud Run.
 
+## CI
+
+Run `go do ci` to create a GitHub CI workflow. The workflow runs `go do` on all pushes and PRs. To enable preview deploys on PRs, configure Workload Identity Federation:
+
+### 1. Set up Workload Identity Federation (one-time)
+
+```bash
+# Uses CLOUDSDK_CORE_PROJECT from .envrc
+source .envrc
+REPO="owner/repo"  # e.g. "housecat-inc/myapp"
+
+# Create workload identity pool
+gcloud iam workload-identity-pools create "github" \
+  --project="$CLOUDSDK_CORE_PROJECT" \
+  --location="global" \
+  --display-name="GitHub Actions"
+
+# Create OIDC provider
+gcloud iam workload-identity-pools providers create-oidc "github" \
+  --project="$CLOUDSDK_CORE_PROJECT" \
+  --location="global" \
+  --workload-identity-pool="github" \
+  --display-name="GitHub" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='$REPO'" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+
+# Create service account for deployments
+gcloud iam service-accounts create "github-actions" \
+  --project="$CLOUDSDK_CORE_PROJECT" \
+  --display-name="GitHub Actions"
+
+# Grant Cloud Run and Container Registry permissions
+gcloud projects add-iam-policy-binding "$CLOUDSDK_CORE_PROJECT" \
+  --member="serviceAccount:github-actions@$CLOUDSDK_CORE_PROJECT.iam.gserviceaccount.com" \
+  --role="roles/run.admin"
+
+gcloud projects add-iam-policy-binding "$CLOUDSDK_CORE_PROJECT" \
+  --member="serviceAccount:github-actions@$CLOUDSDK_CORE_PROJECT.iam.gserviceaccount.com" \
+  --role="roles/storage.admin"
+
+gcloud iam service-accounts add-iam-policy-binding "github-actions@$CLOUDSDK_CORE_PROJECT.iam.gserviceaccount.com" \
+  --project="$CLOUDSDK_CORE_PROJECT" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/$(gcloud projects describe $CLOUDSDK_CORE_PROJECT --format='value(projectNumber)')/locations/global/workloadIdentityPools/github/attribute.repository/$REPO"
+```
+
+### 2. Configure GitHub repository variables
+
+Go to your repo Settings > Secrets and variables > Actions > Variables tab. You can print the values from your `.envrc`:
+
+```bash
+source .envrc
+echo "CLOUDSDK_CORE_PROJECT=$CLOUDSDK_CORE_PROJECT"
+echo "CLOUDSDK_RUN_REGION=$CLOUDSDK_RUN_REGION"
+echo "CLOUD_RUN_SERVICE=$CLOUD_RUN_SERVICE"
+echo "WORKLOAD_IDENTITY_PROVIDER=projects/$(gcloud projects describe $CLOUDSDK_CORE_PROJECT --format='value(projectNumber)')/locations/global/workloadIdentityPools/github/providers/github"
+echo "SERVICE_ACCOUNT=github-actions@$CLOUDSDK_CORE_PROJECT.iam.gserviceaccount.com"
+```
+
 ## Deploy
 
 Run `go do deploy` to deploy you program. It will prompt for Google Cloud settings on first run. Run `go do logs` and `go do status` to inspect deployments.
