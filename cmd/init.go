@@ -95,7 +95,29 @@ func updateEnvrc() error {
 
 func updateClaudeSettings() error {
 	const name = ".claude/settings.json"
-	const perm = "Bash(go:*)"
+	perms := []string{
+		"Bash(go:*)",
+		"Bash(git:*)",
+		"Bash(gh:*)",
+		"Bash(ls:*)",
+		"Bash(tree:*)",
+		"Bash(cat:*)",
+		"Bash(find:*)",
+		"Bash(grep:*)",
+		"Bash(mkdir:*)",
+		"Bash(mv:*)",
+		"Bash(sed:*)",
+		"Bash(awk:*)",
+		"Bash(xargs:*)",
+		"Bash(wc:*)",
+		"Bash(jq:*)",
+		"Bash(curl:*)",
+		"Bash(psql:*)",
+		"Bash(sqlite:*)",
+		"Bash(sqlite3:*)",
+		"Bash(sqlc:*)",
+		"Bash(templ:*)",
+	}
 
 	var settings map[string]any
 
@@ -119,19 +141,26 @@ func updateClaudeSettings() error {
 		allow = []any{}
 	}
 
-	found := false
+	existing := make(map[string]bool)
 	for _, p := range allow {
-		if p == perm {
-			found = true
-			break
+		if s, ok := p.(string); ok {
+			existing[s] = true
 		}
 	}
 
-	if found {
+	var added []string
+	for _, perm := range perms {
+		if !existing[perm] {
+			allow = append(allow, perm)
+			added = append(added, perm)
+		}
+	}
+
+	if len(added) == 0 {
 		return nil
 	}
 
-	permissions["allow"] = append(allow, perm)
+	permissions["allow"] = allow
 
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
@@ -142,7 +171,7 @@ func updateClaudeSettings() error {
 		return errors.WithStack(err)
 	}
 
-	fmt.Printf("Updated %s with permission: %s\n", name, perm)
+	fmt.Printf("Updated %s with permissions: %s\n", name, strings.Join(added, ", "))
 	return nil
 }
 
