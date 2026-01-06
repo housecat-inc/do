@@ -50,6 +50,9 @@ Run `go do ci` to create a GitHub CI workflow. The workflow runs `go do` on all 
 source .envrc
 REPO="owner/repo"  # e.g. "housecat-inc/myapp"
 
+# Enable required APIs
+gcloud services enable iamcredentials.googleapis.com run.googleapis.com artifactregistry.googleapis.com --project="$CLOUDSDK_CORE_PROJECT"
+
 # Create workload identity pool
 gcloud iam workload-identity-pools create "github" \
   --project="$CLOUDSDK_CORE_PROJECT" \

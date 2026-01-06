@@ -89,7 +89,15 @@ func CreateProject(projectID string) error {
 }
 
 // EnsureAPIs enables the specified APIs if not already enabled.
+// Skips in CI (workload identity) since APIs should be pre-enabled and service account lacks permission.
 func EnsureAPIs(project string, apis ...string) error {
+	// Skip in CI - service account doesn't have permission to enable APIs
+	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" ||
+		os.Getenv("CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE") != "" ||
+		os.Getenv("GOOGLE_GHA_CREDS_PATH") != "" {
+		return nil
+	}
+
 	cmd := exec.Command("gcloud", "services", "list", "--enabled", "--format=value(config.name)", "--project", project)
 	out, err := cmd.Output()
 	if err != nil {
@@ -122,7 +130,15 @@ func EnsureAPIs(project string, apis ...string) error {
 }
 
 // EnsureDockerAuth configures docker authentication for gcr.io.
+// Skips in CI where workload identity handles auth.
 func EnsureDockerAuth() error {
+	// Skip in CI - workload identity handles auth
+	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" ||
+		os.Getenv("CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE") != "" ||
+		os.Getenv("GOOGLE_GHA_CREDS_PATH") != "" {
+		return nil
+	}
+
 	home, err := os.UserHomeDir()
 	if err == nil {
 		data, err := os.ReadFile(home + "/.docker/config.json")
