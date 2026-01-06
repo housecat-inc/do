@@ -6,7 +6,7 @@ Go tool for dev ops: init, build, lint, test, deploy apps.
 # install direnv to automatically manage PATH for your app
 brew install direnv
 
-# get the tool and init in the repo
+# get the tool and init in your go project
 go get -tool github.com/housecat-inc/do
 go tool do init --allow
 
@@ -34,6 +34,10 @@ Contrast this approach to documenting standards in README.md / AGENTS.md / CLAUD
 > ⏺ I'll explore to understand analysis packages, then create one that enforces the use of the errors packages.
 > ⏺ Now I'll create the analyzer that will flag direct use of err
 
-## Configuring deploys
+## Development
+
+Run `go do dev` to live reload your `cmd/app` program.
+
+## Deploy
 
 TODO
