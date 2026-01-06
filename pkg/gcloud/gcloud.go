@@ -28,7 +28,15 @@ func IsInstalled() bool {
 }
 
 // IsAuthenticated checks if gcloud is authenticated.
+// Returns true for user auth, service account, or workload identity (ADC).
 func IsAuthenticated() bool {
+	// Check for workload identity / ADC (set by google-github-actions/auth)
+	if os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") != "" ||
+		os.Getenv("CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE") != "" ||
+		os.Getenv("GOOGLE_GHA_CREDS_PATH") != "" {
+		return true
+	}
+
 	cmd := exec.Command("gcloud", "auth", "print-access-token")
 	return cmd.Run() == nil
 }
