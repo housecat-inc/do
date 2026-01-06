@@ -6,12 +6,13 @@ Go tool for dev ops: init, build, lint, test, deploy apps.
 # install direnv to automatically manage PATH for your app
 brew install direnv
 
-# get the tool and init in the repo
+# get the tool and init in your go project
 go get -tool github.com/housecat-inc/do
 go tool do init --allow
 
 # use the `go do` shorthand for common operations
 go do
+ → go mod tidy
  → go generate ./...
  → go build ./...
  → go vet ./...
@@ -34,6 +35,16 @@ Contrast this approach to documenting standards in README.md / AGENTS.md / CLAUD
 > ⏺ I'll explore to understand analysis packages, then create one that enforces the use of the errors packages.
 > ⏺ Now I'll create the analyzer that will flag direct use of err
 
-## Configuring deploys
+## Development
 
-TODO
+Run `go do dev` to live reload your `cmd/app` program.
+
+## Deploy
+
+Run `go do deploy` to deploy you program. It will prompt for Google Cloud settings on first run. Run `go do logs` and `go do status` to inspect deployments.
+
+
+```bash
+# install dependencies to manage Google Cloud
+brew install gcloud-cli ko
+```

@@ -176,7 +176,7 @@ func updateClaudeSettings() error {
 }
 
 func updateGitignore() error {
-	entries := []string{".claude", ".envrc", "bin/do"}
+	entries := []string{".claude", ".envrc", "bin"}
 	existing := make(map[string]bool)
 
 	if file, err := os.Open(".gitignore"); err == nil {

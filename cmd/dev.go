@@ -22,10 +22,11 @@ var devCmd = &cobra.Command{
 		}
 
 		air := exec.Command("air",
+			"--tmp_dir", "bin",
 			"--build.pre_cmd", "go generate ./...",
 			"--build.cmd", "go build -o bin/app ./cmd/app",
 			"--build.bin", "bin/app",
-			"--build.exclude_dir", "node_modules,tmp,vendor,.git,dist,build",
+			"--build.exclude_dir", "node_modules,bin,vendor,.git,dist,build",
 			"--build.exclude_regex", `\.min\.js$|\.sql\.go$|_templ\.go$|_test\.go$|out\.css$|pkg/db/(db|models|querier)\.go$`,
 			"--build.include_ext", "css,go,html,svelte,templ",
 		)
