@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -13,6 +16,13 @@ var verbose bool
 var rootCmd = &cobra.Command{
 	Use:   "do",
 	Short: "A CLI tool for app init, build, test, deploy",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Skip CI setup for certain commands
+		if cmd.Name() == "help" || cmd.Name() == "init" {
+			return nil
+		}
+		return ciSetupIfNeeded()
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		type command struct {
 			args       []string
@@ -49,6 +59,131 @@ var rootCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// ciSetupIfNeeded runs CI-specific setup when CI=true
+func ciSetupIfNeeded() error {
+	if os.Getenv("CI") != "true" {
+		return nil
+	}
+
+	// Drop local replace directives
+	if err := dropLocalReplaces(); err != nil {
+		return err
+	}
+
+	// Install tool dependencies
+	if err := installToolDeps(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// dropLocalReplaces removes local path replace directives from go.mod
+func dropLocalReplaces() error {
+	data, err := os.ReadFile("go.mod")
+	if err != nil {
+		return nil // No go.mod, skip
+	}
+
+	var replaces []string
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// Match: replace github.com/foo => ../local/path
+		if strings.HasPrefix(line, "replace ") && (strings.Contains(line, " => ../") || strings.Contains(line, " => ./")) {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				replaces = append(replaces, parts[1])
+			}
+		}
+	}
+
+	for _, mod := range replaces {
+		fmt.Printf(" → go mod edit -dropreplace %s\n", mod)
+		cmd := exec.Command("go", "mod", "edit", "-dropreplace", mod)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+
+	// Run go mod download if we dropped any replaces
+	if len(replaces) > 0 {
+		fmt.Println(" → go mod download")
+		cmd := exec.Command("go", "mod", "download")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// installToolDeps installs tool dependencies from go.mod
+func installToolDeps() error {
+	data, err := os.ReadFile("go.mod")
+	if err != nil {
+		return nil // No go.mod, skip
+	}
+
+	var tools []string
+	inToolBlock := false
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Single tool directive: tool github.com/foo/bar
+		if strings.HasPrefix(line, "tool ") {
+			tool := strings.TrimPrefix(line, "tool ")
+			tools = append(tools, tool)
+			continue
+		}
+
+		// Tool block: tool ( ... )
+		if line == "tool (" {
+			inToolBlock = true
+			continue
+		}
+		if inToolBlock {
+			if line == ")" {
+				inToolBlock = false
+				continue
+			}
+			if line != "" && !strings.HasPrefix(line, "//") {
+				tools = append(tools, line)
+			}
+		}
+	}
+
+	for _, tool := range tools {
+		// Skip the do tool itself
+		if strings.Contains(tool, "housecat-inc/do") {
+			continue
+		}
+
+		// Extract binary name from tool path
+		binName := filepath.Base(tool)
+
+		// Check if already installed
+		if _, err := exec.LookPath(binName); err == nil {
+			continue
+		}
+
+		fmt.Printf(" → go install %s@latest\n", tool)
+		cmd := exec.Command("go", "install", tool+"@latest")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func init() {
