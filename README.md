@@ -35,9 +35,9 @@ Contrast this approach to documenting standards in README.md / AGENTS.md / CLAUD
 > ⏺ I'll explore to understand analysis packages, then create one that enforces the use of the errors packages.
 > ⏺ Now I'll create the analyzer that will flag direct use of err
 
-## Development
+## Dev
 
-Run `go do dev` to live reload your `cmd/app` program.
+Run `go do dev` to live reload your `cmd/app` program. It should look for `PORT` env var and use that if set, but default to port `8080` for deploy via Cloud Run.
 
 ## Deploy
 

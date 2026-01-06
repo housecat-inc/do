@@ -155,14 +155,23 @@ func ListServices(project, region string) ([]Service, error) {
 	return services, nil
 }
 
-// Deploy deploys an image to Cloud Run.
+// Deploy deploys an image to Cloud Run and routes 100% traffic to it.
 func Deploy(project, region, service, image string) error {
-	return Run("gcloud", "run", "deploy", service,
+	if err := Run("gcloud", "run", "deploy", service,
 		"--image="+image,
 		"--platform=managed",
 		"--region="+region,
 		"--project="+project,
-		"--allow-unauthenticated")
+		"--allow-unauthenticated"); err != nil {
+		return err
+	}
+
+	// Ensure 100% traffic goes to latest revision
+	return Run("gcloud", "run", "services", "update-traffic", service,
+		"--platform=managed",
+		"--region="+region,
+		"--project="+project,
+		"--to-latest")
 }
 
 // DeployWithTag deploys an image with a traffic tag (for branch deploys).
