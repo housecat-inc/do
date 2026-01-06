@@ -20,6 +20,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		commands := []command{
+			{[]string{"go", "mod", "tidy"}, true},
 			{[]string{"go", "generate", "./..."}, true},
 			{[]string{"go", "build", "./..."}, true},
 			{[]string{"go", "vet", "./..."}, false},
