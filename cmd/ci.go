@@ -60,9 +60,6 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Install ko
-        run: go install github.com/google/ko@latest
-
       - name: Deploy preview
         id: deploy
         env:
@@ -137,9 +134,6 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-
-      - name: Install ko
-        run: go install github.com/google/ko@latest
 
       - name: Deploy to production
         env:

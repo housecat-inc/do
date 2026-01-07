@@ -137,16 +137,16 @@ func installToolDeps() error {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		// Single tool directive: tool github.com/foo/bar
-		if strings.HasPrefix(line, "tool ") {
-			tool := strings.TrimPrefix(line, "tool ")
-			tools = append(tools, tool)
-			continue
-		}
-
 		// Tool block: tool ( ... )
 		if line == "tool (" {
 			inToolBlock = true
+			continue
+		}
+
+		// Single tool directive: tool github.com/foo/bar
+		if strings.HasPrefix(line, "tool ") && !strings.HasPrefix(line, "tool (") {
+			tool := strings.TrimPrefix(line, "tool ")
+			tools = append(tools, tool)
 			continue
 		}
 		if inToolBlock {
