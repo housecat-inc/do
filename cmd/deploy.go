@@ -387,6 +387,15 @@ func deployWithKo(project, region, service, buildPath, tag string) error {
 		return errors.WithStack(err)
 	}
 
+	// Run go generate
+	fmt.Println("\nRunning go generate...")
+	generate := exec.Command("go", "generate", "./...")
+	generate.Stdout = os.Stdout
+	generate.Stderr = os.Stderr
+	if err := generate.Run(); err != nil {
+		return errors.WithStack(err)
+	}
+
 	// Build and push with ko
 	fmt.Println("\nBuilding and pushing image with ko...")
 	fmt.Printf(" → ko build %s --bare\n", buildPath)

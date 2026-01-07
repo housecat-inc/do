@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
+	"github.com/housecat-inc/do/pkg/gcloud"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -56,9 +60,6 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Install ko
-        run: go install github.com/google/ko@latest
-
       - name: Deploy preview
         id: deploy
         env:
@@ -76,7 +77,7 @@ jobs:
             --region=$CLOUDSDK_RUN_REGION \
             --project=$CLOUDSDK_CORE_PROJECT \
             --format="value(status.traffic.url)" \
-            | grep "$TAG" | head -1)
+            | tr ';' '\n' | grep "$TAG" | head -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
@@ -134,9 +135,6 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Install ko
-        run: go install github.com/google/ko@latest
-
       - name: Deploy to production
         env:
           CLOUDSDK_CORE_PROJECT: ${{ vars.CLOUDSDK_CORE_PROJECT }}
@@ -145,6 +143,8 @@ jobs:
           KO_DOCKER_REPO: gcr.io/${{ vars.CLOUDSDK_CORE_PROJECT }}/${{ vars.CLOUD_RUN_SERVICE }}
         run: go tool do deploy
 `
+
+var ciSetup bool
 
 var ciCmd = &cobra.Command{
 	Use:   "ci",
@@ -155,13 +155,12 @@ var ciCmd = &cobra.Command{
 - Comments the preview URL on the PR
 - Deploys to production on merge to main
 
-Required GitHub repository variables for deploy:
-  CLOUDSDK_CORE_PROJECT      - GCP project ID
-  CLOUDSDK_RUN_REGION        - Cloud Run region
-  CLOUD_RUN_SERVICE          - Cloud Run service name
-  WORKLOAD_IDENTITY_PROVIDER - Workload identity provider
-  SERVICE_ACCOUNT            - Service account email`,
+Use --setup to configure GCP Workload Identity Federation for CI deploys.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if ciSetup {
+			return runCISetup()
+		}
+
 		// Find project root
 		root, err := findProjectRoot()
 		if err != nil {
@@ -181,16 +180,159 @@ Required GitHub repository variables for deploy:
 		}
 
 		fmt.Printf("Created %s\n", workflowPath)
-		fmt.Println("\nTo enable preview deploys, configure these repository variables:")
-		fmt.Println("  CLOUDSDK_CORE_PROJECT")
-		fmt.Println("  CLOUDSDK_RUN_REGION")
-		fmt.Println("  CLOUD_RUN_SERVICE")
-		fmt.Println("  WORKLOAD_IDENTITY_PROVIDER")
-		fmt.Println("  SERVICE_ACCOUNT")
+		fmt.Println("\nRun 'go tool do ci --setup' to configure GCP Workload Identity for deploys.")
 		return nil
 	},
 }
 
+func runCISetup() error {
+	// Get project from environment
+	project := os.Getenv("CLOUDSDK_CORE_PROJECT")
+	if project == "" {
+		return errors.New("CLOUDSDK_CORE_PROJECT not set. Run 'go tool do deploy' first to configure.")
+	}
+
+	region := os.Getenv("CLOUDSDK_RUN_REGION")
+	if region == "" {
+		region = "us-central1"
+	}
+
+	service := os.Getenv("CLOUD_RUN_SERVICE")
+	if service == "" {
+		return errors.New("CLOUD_RUN_SERVICE not set. Run 'go tool do deploy' first to configure.")
+	}
+
+	// Get repo from git remote
+	var out bytes.Buffer
+	gitCmd := exec.Command("git", "remote", "get-url", "origin")
+	gitCmd.Stdout = &out
+	if err := gitCmd.Run(); err != nil {
+		return errors.New("failed to get git remote. Make sure you're in a git repo with a remote.")
+	}
+
+	remote := strings.TrimSpace(out.String())
+	repo := extractGitHubRepo(remote)
+	if repo == "" {
+		return errors.Errorf("could not parse GitHub repo from remote: %s", remote)
+	}
+
+	fmt.Printf("Setting up CI for %s (project: %s)\n\n", repo, project)
+
+	// Check gcloud is installed and authenticated
+	if !gcloud.IsInstalled() {
+		return errors.New("gcloud is not installed")
+	}
+	if !gcloud.IsAuthenticated() {
+		return errors.New("gcloud is not authenticated. Run 'gcloud auth login'")
+	}
+
+	// Enable required APIs
+	fmt.Println("Enabling required APIs...")
+	if err := gcloud.Run("gcloud", "services", "enable",
+		"iamcredentials.googleapis.com",
+		"run.googleapis.com",
+		"artifactregistry.googleapis.com",
+		"--project="+project); err != nil {
+		return err
+	}
+
+	// Create workload identity pool (ignore error if exists)
+	fmt.Println("\nCreating workload identity pool...")
+	_ = gcloud.Run("gcloud", "iam", "workload-identity-pools", "create", "github",
+		"--project="+project,
+		"--location=global",
+		"--display-name=GitHub Actions")
+
+	// Create OIDC provider (ignore error if exists)
+	fmt.Println("\nCreating OIDC provider...")
+	_ = gcloud.Run("gcloud", "iam", "workload-identity-pools", "providers", "create-oidc", "github",
+		"--project="+project,
+		"--location=global",
+		"--workload-identity-pool=github",
+		"--display-name=GitHub",
+		"--attribute-mapping=google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository",
+		"--attribute-condition=assertion.repository=='"+repo+"'",
+		"--issuer-uri=https://token.actions.githubusercontent.com")
+
+	// Create service account (ignore error if exists)
+	fmt.Println("\nCreating service account...")
+	_ = gcloud.Run("gcloud", "iam", "service-accounts", "create", "github-actions",
+		"--project="+project,
+		"--display-name=GitHub Actions")
+
+	serviceAccount := fmt.Sprintf("github-actions@%s.iam.gserviceaccount.com", project)
+
+	// Grant roles
+	fmt.Println("\nGranting IAM roles...")
+	roles := []string{"roles/run.admin", "roles/storage.admin", "roles/artifactregistry.writer"}
+	for _, role := range roles {
+		if err := gcloud.Run("gcloud", "projects", "add-iam-policy-binding", project,
+			"--member=serviceAccount:"+serviceAccount,
+			"--role="+role); err != nil {
+			return err
+		}
+	}
+
+	// Get project number for compute service account
+	var numOut bytes.Buffer
+	numCmd := exec.Command("gcloud", "projects", "describe", project, "--format=value(projectNumber)")
+	numCmd.Stdout = &numOut
+	if err := numCmd.Run(); err != nil {
+		return errors.WithStack(err)
+	}
+	projectNumber := strings.TrimSpace(numOut.String())
+
+	// Allow github-actions to act as compute service account
+	computeSA := fmt.Sprintf("%s-compute@developer.gserviceaccount.com", projectNumber)
+	if err := gcloud.Run("gcloud", "iam", "service-accounts", "add-iam-policy-binding", computeSA,
+		"--member=serviceAccount:"+serviceAccount,
+		"--role=roles/iam.serviceAccountUser",
+		"--project="+project); err != nil {
+		return err
+	}
+
+	// Allow workload identity to impersonate service account
+	member := fmt.Sprintf("principalSet://iam.googleapis.com/projects/%s/locations/global/workloadIdentityPools/github/attribute.repository/%s",
+		projectNumber, repo)
+	if err := gcloud.Run("gcloud", "iam", "service-accounts", "add-iam-policy-binding", serviceAccount,
+		"--project="+project,
+		"--role=roles/iam.workloadIdentityUser",
+		"--member="+member); err != nil {
+		return err
+	}
+
+	// Print GitHub variables
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	fmt.Println("Add these to GitHub: Settings > Secrets and variables > Actions > Variables")
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Printf("\nCLOUDSDK_CORE_PROJECT=%s\n", project)
+	fmt.Printf("CLOUDSDK_RUN_REGION=%s\n", region)
+	fmt.Printf("CLOUD_RUN_SERVICE=%s\n", service)
+	fmt.Printf("WORKLOAD_IDENTITY_PROVIDER=projects/%s/locations/global/workloadIdentityPools/github/providers/github\n", projectNumber)
+	fmt.Printf("SERVICE_ACCOUNT=%s\n", serviceAccount)
+
+	return nil
+}
+
+func extractGitHubRepo(remote string) string {
+	// Handle SSH: git@github.com:owner/repo.git
+	if strings.HasPrefix(remote, "git@github.com:") {
+		repo := strings.TrimPrefix(remote, "git@github.com:")
+		repo = strings.TrimSuffix(repo, ".git")
+		return repo
+	}
+	// Handle HTTPS: https://github.com/owner/repo.git
+	if strings.Contains(remote, "github.com/") {
+		parts := strings.Split(remote, "github.com/")
+		if len(parts) == 2 {
+			repo := strings.TrimSuffix(parts[1], ".git")
+			return repo
+		}
+	}
+	return ""
+}
+
 func init() {
+	ciCmd.Flags().BoolVar(&ciSetup, "setup", false, "configure GCP Workload Identity Federation for CI deploys")
 	rootCmd.AddCommand(ciCmd)
 }
