@@ -24,6 +24,17 @@ var rootCmd = &cobra.Command{
 		return ciSetupIfNeeded()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Install templ if needed (for go generate)
+		if _, err := exec.LookPath("templ"); err != nil {
+			install := exec.Command("go", "install", "github.com/a-h/templ/cmd/templ@latest")
+			install.Stdout = os.Stdout
+			install.Stderr = os.Stderr
+			if err := install.Run(); err != nil {
+				// Ignore error - templ may not be needed
+				_ = err
+			}
+		}
+
 		type command struct {
 			args       []string
 			hasVerbose bool

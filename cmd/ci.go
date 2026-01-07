@@ -77,7 +77,7 @@ jobs:
             --region=$CLOUDSDK_RUN_REGION \
             --project=$CLOUDSDK_CORE_PROJECT \
             --format="value(status.traffic.url)" \
-            | grep "$TAG" | head -1)
+            | tr ';' '\n' | grep "$TAG" | head -1)
           echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
