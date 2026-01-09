@@ -13,6 +13,7 @@ var updateCmd = &cobra.Command{
 	Short: "Update do to the latest version",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		goCmd := exec.Command("go", "get", "-tool", "github.com/housecat-inc/do@main")
+		goCmd.Env = append(os.Environ(), "GOPROXY=direct")
 		goCmd.Stdout = os.Stdout
 		goCmd.Stderr = os.Stderr
 		if err := goCmd.Run(); err != nil {

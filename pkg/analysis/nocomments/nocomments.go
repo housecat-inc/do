@@ -84,6 +84,12 @@ func isAllowed(c *ast.Comment, docPositions map[token.Pos]bool) bool {
 	if strings.HasPrefix(text, "/*!") {
 		return true
 	}
+	if strings.HasPrefix(text, "//go:") {
+		return true
+	}
+	if strings.HasPrefix(text, "//nolint") {
+		return true
+	}
 
 	return false
 }
