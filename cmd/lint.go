@@ -120,7 +120,7 @@ func filterGenerated(files []*ast.File) []*ast.File {
 func isGenerated(file *ast.File) bool {
 	for _, cg := range file.Comments {
 		for _, c := range cg.List {
-			if strings.HasPrefix(c.Text, "// Code generated") && strings.HasSuffix(c.Text, "DO NOT EDIT.") {
+			if strings.Contains(c.Text, "Code generated") && strings.Contains(c.Text, "DO NOT EDIT") {
 				return true
 			}
 		}
