@@ -77,6 +77,12 @@ func ciSetupIfNeeded() error {
 		return nil
 	}
 
+	// Skip if already run (e.g., when lint subcommand is spawned as external process)
+	if os.Getenv("DO_CI_SETUP_DONE") == "1" {
+		return nil
+	}
+	os.Setenv("DO_CI_SETUP_DONE", "1")
+
 	// Drop local replace directives
 	if err := dropLocalReplaces(); err != nil {
 		return err
