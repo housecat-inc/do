@@ -35,23 +35,14 @@ var lintCmd = &cobra.Command{
 			return nil
 		}
 
-		if _, err := exec.LookPath("golangci-lint"); err != nil {
-			install := exec.Command("go", "install", "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest")
-			install.Stdout = os.Stdout
-			install.Stderr = os.Stderr
-			if err := install.Run(); err != nil {
-				return errors.WithStack(err)
-			}
-		}
-
 		if err := ensureLintConfig(); err != nil {
 			return err
 		}
 
 		var hasErrors bool
 
-		// Run golangci-lint
-		golangci := exec.Command("golangci-lint", "run", "./...")
+		// Run golangci-lint via go tool (requires tool directive in go.mod)
+		golangci := exec.Command("go", "tool", "golangci-lint", "run", "./...")
 		golangci.Stdout = os.Stdout
 		golangci.Stderr = os.Stderr
 		if err := golangci.Run(); err != nil {
