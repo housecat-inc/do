@@ -8,9 +8,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var logsTail bool
+
 var logsCmd = &cobra.Command{
 	Use:   "logs",
-	Short: "Tail logs from the deployed Cloud Run service",
+	Short: "View logs from the deployed Cloud Run service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		project := os.Getenv("CLOUDSDK_CORE_PROJECT")
 		region := os.Getenv("CLOUDSDK_RUN_REGION")
@@ -20,10 +22,18 @@ var logsCmd = &cobra.Command{
 			return errors.New("no service deployed. Run 'go do deploy' first")
 		}
 
-		// Use gcloud beta run services logs tail
-		run := exec.Command("gcloud", "beta", "run", "services", "logs", "tail", service,
-			"--project="+project,
-			"--region="+region)
+		var run *exec.Cmd
+		if logsTail {
+			// Use gcloud beta run services logs tail for live streaming
+			run = exec.Command("gcloud", "beta", "run", "services", "logs", "tail", service,
+				"--project="+project,
+				"--region="+region)
+		} else {
+			// Use gcloud beta run services logs read for recent logs
+			run = exec.Command("gcloud", "beta", "run", "services", "logs", "read", service,
+				"--project="+project,
+				"--region="+region)
+		}
 		run.Stdout = os.Stdout
 		run.Stderr = os.Stderr
 		run.Stdin = os.Stdin
@@ -37,5 +47,6 @@ var logsCmd = &cobra.Command{
 }
 
 func init() {
+	logsCmd.Flags().BoolVarP(&logsTail, "tail", "t", false, "Tail logs in real-time")
 	rootCmd.AddCommand(logsCmd)
 }
