@@ -37,18 +37,23 @@ var rootCmd = &cobra.Command{
 		type command struct {
 			args       []string
 			hasVerbose bool
+			skipInCI   bool
 		}
 
 		commands := []command{
-			{[]string{"go", "generate", "./..."}, true},
-			{[]string{"go", "mod", "tidy"}, true},
-			{[]string{"go", "build", "-o", "/dev/null", "./..."}, true},
-			{[]string{"go", "vet", "./..."}, false},
-			{[]string{"go", "tool", "do", "lint"}, false},
-			{[]string{"go", "test", "./..."}, true},
+			{[]string{"go", "generate", "./..."}, true, false},
+			{[]string{"go", "mod", "tidy"}, true, true},
+			{[]string{"go", "build", "-o", "/dev/null", "./..."}, true, false},
+			{[]string{"go", "vet", "./..."}, false, false},
+			{[]string{"go", "tool", "do", "lint"}, false, false},
+			{[]string{"go", "test", "./..."}, true, false},
 		}
 
+		isCI := os.Getenv("CI") == "true"
 		for _, c := range commands {
+			if c.skipInCI && isCI {
+				continue
+			}
 			args := c.args
 			if verbose && c.hasVerbose {
 				args = append(args[:2:2], append([]string{"-v"}, args[2:]...)...)
