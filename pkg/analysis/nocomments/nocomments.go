@@ -24,10 +24,6 @@ var Analyzer = &doanalysis.Analyzer{
 
 func run(pass *analysis.Pass) (any, error) {
 	for _, file := range pass.Files {
-		if isGenerated(file) {
-			continue
-		}
-
 		docPositions := collectDocPositions(file)
 
 		for _, cg := range file.Comments {
@@ -40,17 +36,6 @@ func run(pass *analysis.Pass) (any, error) {
 		}
 	}
 	return nil, nil
-}
-
-func isGenerated(file *ast.File) bool {
-	for _, cg := range file.Comments {
-		for _, c := range cg.List {
-			if strings.HasPrefix(c.Text, "// Code generated") && strings.HasSuffix(c.Text, "DO NOT EDIT.") {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func collectDocPositions(file *ast.File) map[token.Pos]bool {
