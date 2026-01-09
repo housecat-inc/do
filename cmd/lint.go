@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	doanalysis "github.com/housecat-inc/do/pkg/analysis"
+	"github.com/housecat-inc/do/pkg/analysis/nocomments"
 	"github.com/housecat-inc/do/pkg/analysis/pkgerrors"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -20,7 +21,7 @@ var lintCmd = &cobra.Command{
 	Use:   "lint",
 	Short: "Run linters on the project",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		analyzers := []*doanalysis.Analyzer{pkgerrors.Analyzer}
+		analyzers := []*doanalysis.Analyzer{pkgerrors.Analyzer, nocomments.Analyzer}
 
 		if listAnalyzers {
 			for _, a := range analyzers {
