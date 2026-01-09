@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"go/ast"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	doanalysis "github.com/housecat-inc/do/pkg/analysis"
 	"github.com/housecat-inc/do/pkg/analysis/nocomments"
@@ -81,11 +83,16 @@ func runAnalyzers(pattern string, analyzers []*doanalysis.Analyzer) int {
 
 	var issues int
 	for _, pkg := range pkgs {
+		files := filterGenerated(pkg.Syntax)
+		if len(files) == 0 {
+			continue
+		}
+
 		for _, a := range analyzers {
 			pass := &analysis.Pass{
 				Analyzer:  a.Analyzer,
 				Fset:      pkg.Fset,
-				Files:     pkg.Syntax,
+				Files:     files,
 				Pkg:       pkg.Types,
 				TypesInfo: pkg.TypesInfo,
 				Report: func(d analysis.Diagnostic) {
@@ -98,6 +105,27 @@ func runAnalyzers(pattern string, analyzers []*doanalysis.Analyzer) int {
 		}
 	}
 	return issues
+}
+
+func filterGenerated(files []*ast.File) []*ast.File {
+	var result []*ast.File
+	for _, f := range files {
+		if !isGenerated(f) {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
+func isGenerated(file *ast.File) bool {
+	for _, cg := range file.Comments {
+		for _, c := range cg.List {
+			if strings.HasPrefix(c.Text, "// Code generated") && strings.HasSuffix(c.Text, "DO NOT EDIT.") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func ensureLintConfig() error {
